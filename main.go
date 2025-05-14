@@ -185,9 +185,6 @@ func main() {
 		log.Fatalf("Error creating index.html: %v", err)
 	}
 
-	fileServer := http.FileServer(http.Dir(tempDir))
-	//http.Handle("/", fileServer)
-
 	listener, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
 	if err != nil {
 		log.Fatalf("Error starting server: %v", err)
@@ -196,9 +193,10 @@ func main() {
 	actualPort := listener.Addr().(*net.TCPAddr).Port
 	serverURL := fmt.Sprintf("http://localhost:%d/index.html", actualPort)
 	fmt.Printf("Starting server on %s\n", serverURL)
-	fmt.Println("Press Ctrl+C to stop server")
 
-	server := http.Server{Handler: fileServer}
+	server := http.Server{
+		Handler: http.FileServer(http.Dir(tempDir)),
+	}
 	go func() {
 		if err := server.Serve(listener); err != nil && err != http.ErrServerClosed {
 			log.Printf("Server error: %v", err)
@@ -211,6 +209,8 @@ func main() {
 			fmt.Printf("Error opening browser: %v\n", err)
 		}
 	}
+
+	fmt.Println("Press Ctrl+C to stop server")
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
