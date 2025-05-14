@@ -28,6 +28,13 @@ var indexHTML embed.FS
 
 var imageExtensions = []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif"}
 
+func closeWithLog(f io.Closer, tag string) {
+	err := f.Close()
+	if err != nil {
+		log.Printf("Error closing %s: %v", tag, err)
+	}
+}
+
 func createIndexHTML(dir string) error {
 	files, err := os.ReadDir(dir)
 	if err != nil {
@@ -52,7 +59,7 @@ func createIndexHTML(dir string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create index.html: %w", err)
 	}
-	defer f.Close()
+	defer closeWithLog(f, "index.html")
 
 	tpl, err := template.New("index.html.tmpl").ParseFS(indexHTML, "index.html.tmpl")
 	if err != nil {
@@ -96,7 +103,7 @@ func extractArchive(archivePath, dir string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open zip file: %w", err)
 	}
-	defer zipReader.Close()
+	defer closeWithLog(zipReader, "zipReader")
 
 	for _, file := range zipReader.File {
 		extractPath := filepath.Join(dir, file.Name)
@@ -112,22 +119,26 @@ func extractArchive(archivePath, dir string) error {
 		err = func() error {
 			outFile, err := os.OpenFile(extractPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, file.Mode())
 			if err != nil {
-				return fmt.Errorf("failed to extract zip file: %w", err)
+				return err
 			}
-			defer outFile.Close()
+			defer closeWithLog(outFile, "outFile")
 
 			fileReader, err := file.Open()
 			if err != nil {
-				return fmt.Errorf("failed to extract zip file: %w", err)
+				return err
 			}
-			defer fileReader.Close()
+			defer closeWithLog(fileReader, "fileReader")
 
 			if _, err := io.Copy(outFile, fileReader); err != nil {
-				return fmt.Errorf("failed to extract zip file: %w", err)
+				return err
 			}
 
 			return nil
 		}()
+
+		if err != nil {
+			return fmt.Errorf("failed to extract zip file: %w", err)
+		}
 	}
 
 	return nil
@@ -206,5 +217,5 @@ func main() {
 	<-sigChan
 
 	fmt.Println("Shutting down server...")
-	server.Shutdown(context.Background())
+	_ = server.Shutdown(context.Background())
 }
